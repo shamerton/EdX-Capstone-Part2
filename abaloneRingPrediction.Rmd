@@ -1,0 +1,290 @@
+---
+title: "Abalone Age Prediction with a Machine Learning Ensemble Model"
+author: "Scott Hamerton"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r init, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+load("FinalAssessmentPart2_report.RData")
+```
+
+## Introduction
+
+This report is the second of two capstone assignments in the HarvardX PH125.9x Data Science course. The objective of this project was to demonstrate machine learning capabilities using a user-chosen data set.
+
+The objective of the script referenced in this report was to predict the ring count (and therefore the age) of an abalone sea snail from measurements that are easy to acquire during harvest, as opposed to the ring count itself, which is a painstaking process. As described by the original author of the data, "the age of abalone is determined by cutting the shell through the cone, staining it, and counting the number of rings through a microscope -- a boring and time-consuming task."[1] The time-consuming nature of the ring-counting task makes it an ideal exercise to expedite with machine learning.
+
+This data set was chosen for the following reasons:
+
+- the number of observations was limited to 4,177. This permitted quicker and flexible testing of different models.
+- the data set was already cleaned regarding missing values.
+- the objective prediction was very clear and straightforward.
+- the measurement variables were continuous, covered a large range, and were self-evident properties to a non-expert (for example, length and height of the shell).
+- the measurement variables were limited in count (8 variables plus 1 predicted value).
+- the author was totally unfamiliar with abalone as a subject matter. The idea was that this would minimize any unknown internal biases.
+
+### Claude Code Disclosure
+
+The Claude Code large language model (LLM) by Anthropic was used during the development of this project. The primary use of Claude was to validate and troubleshoot manually written code. As this was my first significant attempt at software development, Claude's ability to identify errors and correct oversights was invaluable to both skill development and submission deadlines.
+
+Claude assisted sections of code are commented as "Claude assisted:" followed by an explanation of the assistance. Every line of code is understood and can be explained on demand.
+
+All comments were written by me.
+
+## Data Exploration
+
+The dataset contained the following nine (9) variables:
+
+- Sex: the sex of the abalone
+- Length: the length of the shell
+- Diameter: the diameter of the shell
+- Height: the height of the shell
+- WeightWhole: the weight of the entire abalone
+- WeightShucked: the weight of the harvested flesh from the abalone
+- WeightViscera: the weight of the internal organs of the abalone
+- WeightShell: the weight of the shucked shell of the abalone
+- Rings: the age of the abalone. Actual age is ring count +1.5
+
+Rings was the variable to be predicted, leaving eight (8) potential prediction parameters.
+
+In the original data, the values of the variables (excluding Rings) were scaled down by a factor of 200. This scale was reversed back to their original values.
+
+### Outliers
+
+Most of the data was not significantly impacted by outliers. Additionally, missing values had already been removed from the original dataset by the data provider.[1]
+
+Two prominent outliers did exist in the Height variable. Those two data dramatically exceeded all other values and appeared to be either extreme physical mutations or observational errors.
+
+```{r plotHeightOutliers, echo=FALSE}
+plotHeightOutliers
+```
+
+These two data were removed and are not included in any other plots.
+
+Although our boxplots (shown later) revealed additional outliers, those data did *not* appear spurious. Additionally, there are only 4,177 observations in the original data, which makes any decision to remove observations a perilous one. All other outliers were left in the data.
+
+### Univariate Data
+
+To begin our data exploration, we confirmed that the distribution of our target variable was normal.
+
+```{r plotAgeDist, echo=FALSE}
+plotAgeDist
+```
+
+On this plot, the red line indicates the mean and the two blue lines mark the two standard deviations boundaries.
+
+We also confirmed that each of the potential predictors appeared to be reasonably normal.
+
+```{r plotVarDensity, echo=FALSE}
+plotVarDensity
+```
+
+While Diameter, Height, and Length are skewed slightly to the right, all of the weights are skewed to the left. Other than that, the data appears to be normal.
+
+### Bivariate Data
+
+Next, all potential predictor variables were visualized on a scatter plot with the ring count on the x-axis to see if one particular variable presented as a stronger predictor. Ideally, there should be a linear shape to the cloud of points. Sex was shown separately to explore the possibility of sexual dimorphism.
+
+```{r plotVarScatter, echo=FALSE}
+plotVarScatter
+```
+
+Although there was an apparent regression coefficient in the shape, it was unfortunately spread out and very similar for every variable. Even worse, there was significant overlap.
+
+```{r plotVarBox, echo=FALSE}
+plotVarBox
+```
+
+Exploring the quartiles in a box plot revealed a plateau in the mean of measurements around a ring count of 10. This was a promising sight for a local regression model.
+
+### Ratios
+
+Several ratios of measurements were introduced to the data set in search of additional predictors. The motivation for this effort was the idea that older abalone would have thicker and heavier shells, since the dimensions of the shell appeared to flatten around age 10 but the ring count would continue to grow. That is, the shell no longer gets bigger but it does get heavier.
+
+The explored ratios were:
+
+- Shell only weight to total weight
+- Shucked meat weight to total weight
+- Shell length to total shell weight
+
+Unfortunately, the first two plots revealed a shape that was very flat, such as this plot of the shell weight to total weight.
+
+```{r plotRatioShellWhole, echo=FALSE}
+plotRatioShellWhole
+```
+
+After some consideration, this aligned with what could be expected from a ratio between two similar right-skewed density plots (shown above). When combining one of the right-skews (shell length) with a left-skew (shell weight), we get the following plot of shell length to shell weight.
+
+```{r plotRatioLengthShell_2, echo=FALSE}
+plotRatioLengthShell
+```
+
+When scaled to log 10, we see a very clear downward slope. In other words, abalone shell dimensions grow faster than their weight when they're young, but once they mature, the weight begins to fill out (not unlike human children).
+
+Since the shape of the density plots were highly similar, additional ratios were not explored.
+
+### Abalone Sex
+
+The source of the data for the Sex variable was not fully explained in the original material. Specifically, the inclusion of "infant" introduced an unforeseen complexity in the form of the following question: are infant abalone an observed property or a derived property?
+
+Some light internet searching indicated that adult male and female abalone are simple to identify in an non-invasive manner.[2] Given that to be true, it is possible that infant abalone in this data are abalone that could not be sexed. If so, then Sex is an observed property and holds value as a training variable. However, if Sex is a property derived from other physical measurements, then it could potentially cause the source variables to carry undue weight.
+
+A box plot of the sex distributions reveals a nearly identical distribution between male and female with a notable predictor capability in the infant category.
+
+```{r plotGenderBox, echo=FALSE}
+plotGenderBox
+```
+
+In combination with the shell length to shell weight ratio plot (shown earlier), abalone sex would clearly perform well as a predictor, but were the infant abalone identified *prior* to additional measurements or were they calculated *from* those measurements?
+
+Since the source of the infant abalone was unknown, and they comprised a large portion of an already limited data set (`r round(infantRatio,2)*100`%), the final model was broken into two versions: one version with Sex included and one with it excluded.
+
+## Methods and Analysis
+
+As shown in the data exploration plots, the data are highly overlapped with no obvious distinction between the variables (excluding infants). From this, only the localized linear regression model appeared to offer any significant advantages (especially to someone with little experience in the field of machine learning). Rather than overlook potentially stronger models, the chosen approach was to apply a variety of models to the data and use k-fold cross validation to find the models with the best performance. From the results of those trials, the best-performing models were then added to an ensemble model that was again validated with k-fold cross validation.
+
+The ensemble function used for the final model was caretEnsemble(), as advised in the article Integrating Caret with Other R Packages for Enhanced Machine Learning Performance.[8]
+
+### Root Mean Square Error (RMSE)
+
+The criteria for adjudicating accuracy within this project was Root Mean Square Error (RMSE) between a predicted ring count and the actual ring count of an abalone.
+
+The following custom function was added to the code to facilitate RMSE analysis:
+
+```{r rmsefunction, echo=FALSE}
+RMSE <- function(actual, predicted) {
+  sqrt(mean((actual - predicted)^2))
+}
+```
+
+This function is based on the advice presented in the blog How to Calculate Root Mean Square Error (RMSE) in R.[9]
+
+### K-fold Cross Validation
+
+K-fold cross validation was chosen as a cross validation method due to the relatively limited number of observations in the data (`r count(dat)`). A k-fold approach minimized the risk of a small hold out having biased values that affected the final RMSE. The downside to k-fold was that it required longer to train the models. In this instance, an inefficient training time was less of a concern than an unfairly weighted RMSE value, and so a robust cross validation method was preferred.
+
+The $resample entry from the linear model demonstrates how severely the RMSE can change between folds and why k-fold is preferred.
+
+```{r resample, echo=FALSE}
+yRingsLM$resample$RMSE
+```
+
+A total of four (4) folds were chosen for this data. Although four folds is fewer than the conventional advice of five to ten folds,[6] further reading indicated that fewer folds may perform better for smaller data sets.[7] Manual testing of 3-, 4-, and 5-fold cross validation on the same seed revealed a marginal improvement of ~0.007 to the RMSE (2.094 at 3, 2.087 at 4, and 2.095 at 5). While the improvement was insignificant, four folds were kept for the cross validation.
+
+### Predictors
+
+Based on the discoveries made during data exploration, the decision was made to include all variables as predictors:
+
+- Sex: the sex of the abalone (Male, Female, or Infant)
+- Length: the length of the shell
+- Diameter: the diameter of the shell
+- Height: the height of the shell
+- WeightWhole: the weight of the entire abalone
+- WeightShucked: the weight of the harvested meat from the abalone
+- WeightViscera: the weight of the internal organs of the abalone
+- WeightShell: the weight of the shucked shell of the abalone
+- ratioShellWhole: the ratio of the shell only weight to total weight
+- ratioShuckedWhole: the ratio of the shucked meat only weight to total weight
+- ratioLengthShell: the ratio of the shell length to total shell weight
+
+However, the Sex variable was included only in an alternative version of the ensemble model. The results of each ensemble are presented separately.
+
+### Models
+
+The following models were tested for their performance:
+
+- Linear Model
+- Linear Model (Classified)
+- Generalized Linear Model (GLM)
+- Localized Linear Model (Loess)
+- k-Nearest Neighbours (KNN)
+- Random Forest
+- Ranger
+- Gradient Boosted Model (GBM)
+
+Classified versions of the continuous measurement variables were created to facilitate classified versions of the other models. The variables were cut into 20 bins and assigned an integer for each bin. The motivation for this process was the idea that since the ring count of the abalone is an integer, it would be beneficial to create integer versions of the measurements. This was a mistake that resulted in a much worse RMSE. Classified variables were used to create only a single classified model and then abandoned.
+
+The two models, Loess and KNN, were predicted to perform the best.
+
+Both Ranger and GBM were suggested by Claude Code. These models were studied prior to their adoption to gain familiarity with their behaviours and parameters compared to other models.[3][4][5]
+
+After reviewing the performance of each model, the top performers were added to an ensemble with their $bestTune parameters using the caretEnsemble() function. The final weights of each model toward the final prediction were determined as part of caretEnsemble.
+
+## Results
+
+The performance of each model was compared against a naive RMSE that used only the mean of the Rings variable (`r round(yRingsInit,4)`).
+
+The following table outlines the performance of each model arranged with the greatest improvement at the top.
+
+```{r modelPerf, echo=FALSE}
+arrange(modelPerf, desc(Improvement))
+```
+
+From this list, the top four (4) models were chosen for the ensemble (Ranger, Localized Linear, KNN, and Gradient Boost). Despite performing better than the gradient boost model, the random forest model was dropped in favour of the ranger model (a faster and more performant variant of the random forest). The gradient boost model was retained for variety within the ensemble. Likewise, the remaining linear models were dropped in favour of the localized linear model.
+
+Below are the final performance results of the two ensembles.
+
+Final ensemble (minus Sex variable):
+```{r yRingsEnsemble, echo=FALSE}
+yRingsEnsemble$ens_model$finalModel
+```
+
+Final ensemble (all variables):
+```{r yRingsEnsembleS, echo=FALSE}
+yRingsEnsembleS$ens_model$finalModel
+```
+
+In the end, the Sex variable did not impact the results nearly as much as predicted. Interestingly, with the Sex variable included, the localized model was given significantly lower weight in the ensemble (0.45 down to 0.17). This lends support to the original prediction that a localized linear model would perform well using only the numerical data. Once Sex was included, the ranger and gradient boosted models took over, which aligns with what was seen in the data exploration; both ranger and gradient boost are tree-based models that could benefit from an advantageous starting class when predicting age (i.e. infant vs adult).
+
+A random selection of ten records from the two data sets confirmed the similar performance results.
+
+Final ensemble (minus Sex variable):
+```{r sliceEnsemble, echo=FALSE}
+sliceEnsemble
+```
+
+Final ensemble (all variables):
+```{r sliceEnsembleS, echo=FALSE}
+sliceEnsembleS
+```
+
+### Performance Improvements
+
+Future performance improvements could be achieved through the introduction of additional data collection that varies from the existing measurements. As seen during data exploration, many of the measurement variables are extremely similar in their regression slopes. A variable such as "collection site" could add significant value as an indicator of diet, illness, or overfishing. A variable such as "collection date" could add value in the form of declining or thriving populations over time. One other possible aspect not considered during model development was to transform the data, such as a log10 transformation. The possibility of other unknown transformations that could improve the overall accuracy of the model could also be explored.
+
+## Conclusion
+
+At the outset of the project—and especially during data exploration—it appeared that achieving a meaningful prediction was going to be very difficult due to the large overlap in the measurement data. However, the final ensemble model was able to achieve an RMSE of `r round(yRingsEnsemble$ens_model$finalModel$RMSE,4)`, placing most predictions very close to the actual ring count. This was a significant improvement over the naive mean of `r round(yRingsInit,4)`. In addition to being an excellent learning experience, this level of performance wildly exceeded the author's expectations and truly demonstrated the advantages of machine learning.
+
+## References
+
+[1] Abalone Data Set, November 1995
+<https://archive.ics.uci.edu/dataset/1/abalone>
+
+[2] Abalone Reproduction and Growth, Genny Anderson, 27 October 2003
+<https://www.marinebio.net/marinescience/06future/abrepro.htm>
+
+[3] Ranger Function In R, 23 July 2025
+<https://www.geeksforgeeks.org/r-language/ranger-function-in-r/>
+
+[4] Gradient Boosting in ML, 3 December 2025
+<https://www.geeksforgeeks.org/machine-learning/ml-gradient-boosting/>
+
+[5] Gradient Boosting Regressor, Explained: A Visual Guide with Code Examples, Samy Baladram, 14 November 2024
+<https://towardsdatascience.com/gradient-boosting-regressor-explained-a-visual-guide-with-code-examples-c098d1ae425c/>
+
+[6] K-Fold Cross Validation in R (Step-by-Step), Zach Bobbitt, 4 November 2020
+<https://www.statology.org/k-fold-cross-validation-in-r/>
+
+[7] The impact of K selection in K‑fold cross-validation on bias and variance in supervised learning models, Tahsinul Abedin, Haoming Xu & Shahadat Uddin, 23 January 2026
+<https://www.nature.com/articles/s41598-026-37247-x>
+
+[8] Integrating Caret with Other R Packages for Enhanced Machine Learning Performance, Valeriu Crudu & MoldStud Research Team, 23 August 2025
+<https://moldstud.com/articles/p-integrating-caret-with-other-r-packages-for-enhanced-machine-learning-performance>
+
+[9] finnstats, How to Calculate Root Mean Square Error (RMSE) in R, July 2021
+<https://www.r-bloggers.com/2021/07/how-to-calculate-root-mean-square-error-rmse-in-r/>
