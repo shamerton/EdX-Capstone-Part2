@@ -237,7 +237,7 @@ Final ensemble (all variables):
 yRingsEnsembleS$ens_model$finalModel
 ```
 
-In the end, the Sex variable did not impact the results nearly as much as predicted. Interestingly, with the Sex variable included, the localized model was given significantly lower weight in the ensemble (0.41 down to 0.21). This lends support to the original prediction that a localized linear model would perform well using only the numerical data. Once Sex was included, the ranger and gradient boosted models took over, which aligns with what was seen in the data exploration; both ranger and gradient boost are tree-based models that could benefit from an advantageous starting class when predicting age (i.e. infant vs adult).
+In the end, the Sex variable did not impact the results nearly as much as predicted. Interestingly, with the Sex variable included, the localized model was given significantly lower weight in the ensemble (0.41 down to 0.21). This lends support to the original prediction that a localized linear model would perform well using only the numerical data. Once Sex was included, the ranger model took over, which aligns with what was seen in the data exploration; ranger is a tree-based models that could benefit from an advantageous starting class when predicting age (i.e. infant vs adult).
 
 A random selection of ten records from the two data sets confirmed the similar performance results.
 
