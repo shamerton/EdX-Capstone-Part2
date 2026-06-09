@@ -9,6 +9,7 @@ output: pdf_document
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 load("FinalAssessmentPart2_report.RData")
 ```
 
@@ -22,7 +23,7 @@ This data set was chosen for the following reasons:
 
 - the number of observations was limited to 4,177. This permitted quicker and flexible testing of different models.
 - the data set was already cleaned regarding missing values.
-- the objective prediction was very clear and straightforward.
+- the predicted value was clear and straightforward.
 - the measurement variables were continuous, covered a large range, and were self-evident properties to a non-expert (for example, length and height of the shell).
 - the measurement variables were limited in count (8 variables plus 1 predicted value).
 - the author was totally unfamiliar with abalone as a subject matter. The idea was that this would minimize any unknown internal biases.
@@ -133,7 +134,7 @@ The source of the data for the Sex variable was not fully explained in the origi
 
 Some light internet searching indicated that adult male and female abalone are simple to identify in an non-invasive manner.[2] Given that to be true, it is possible that infant abalone in this data are abalone that could not be sexed. If so, then Sex is an observed property and holds value as a training variable. However, if Sex is a property derived from other physical measurements, then it could potentially cause the source variables to carry undue weight.
 
-A box plot of the sex distributions reveals a nearly identical distribution between male and female with a notable predictor capability in the infant category.
+A box plot of the sex distributions revealed a nearly identical distribution between male and female with a notable predictor capability in the infant category.
 
 ```{r plotGenderBox, echo=FALSE}
 plotGenderBox
@@ -155,7 +156,7 @@ The criteria for adjudicating accuracy within this project was Root Mean Square 
 
 The following custom function was added to the code to facilitate RMSE analysis:
 
-```{r rmsefunction, echo=FALSE}
+```
 RMSE <- function(actual, predicted) {
   sqrt(mean((actual - predicted)^2))
 }
@@ -167,7 +168,7 @@ This function is based on the advice presented in the blog How to Calculate Root
 
 K-fold cross validation was chosen as a cross validation method due to the relatively limited number of observations in the data (`r count(dat)`). A k-fold approach minimized the risk of a small hold out having biased values that affected the final RMSE. The downside to k-fold was that it required longer to train the models. In this instance, an inefficient training time was less of a concern than an unfairly weighted RMSE value, and so a robust cross validation method was preferred.
 
-The $resample entry from the linear model demonstrates how severely the RMSE can change between folds and why k-fold is preferred.
+The $resample entry from the linear model demonstrates how severely the RMSE can change between folds and why k-fold was preferred.
 
 ```{r resample, echo=FALSE}
 yRingsLM$resample$RMSE
@@ -177,7 +178,7 @@ A total of four (4) folds were chosen for this data. Although four folds is fewe
 
 ### Predictors
 
-Based on the discoveries made during data exploration, the decision was made to include all variables as predictors:
+Based on the discoveries made during data exploration, the decision was made to include these variables as predictors:
 
 - Sex: the sex of the abalone (Male, Female, or Infant)
 - Length: the length of the shell
@@ -187,8 +188,6 @@ Based on the discoveries made during data exploration, the decision was made to 
 - WeightShucked: the weight of the harvested meat from the abalone
 - WeightViscera: the weight of the internal organs of the abalone
 - WeightShell: the weight of the shucked shell of the abalone
-- ratioShellWhole: the ratio of the shell only weight to total weight
-- ratioShuckedWhole: the ratio of the shucked meat only weight to total weight
 - ratioLengthShell: the ratio of the shell length to total shell weight
 
 However, the Sex variable was included only in an alternative version of the ensemble model. The results of each ensemble are presented separately.
@@ -206,7 +205,7 @@ The following models were tested for their performance:
 - Ranger
 - Gradient Boosted Model (GBM)
 
-Classified versions of the continuous measurement variables were created to facilitate classified versions of the other models. The variables were cut into 20 bins and assigned an integer for each bin. The motivation for this process was the idea that since the ring count of the abalone is an integer, it would be beneficial to create integer versions of the measurements. This was a mistake that resulted in a much worse RMSE. Classified variables were used to create only a single classified model and then abandoned.
+Classified versions of the continuous measurement variables were created to facilitate classified versions of the models. The variables were cut into 20 bins and assigned an integer for each bin. The motivation for this process was the idea that since the ring count of the abalone is an integer, it would be beneficial to create integer versions of the measurements. This was a mistake that resulted in a much worse RMSE. Classified variables were used to create only a single classified model and then abandoned.
 
 The two models, Loess and KNN, were predicted to perform the best.
 
@@ -238,7 +237,7 @@ Final ensemble (all variables):
 yRingsEnsembleS$ens_model$finalModel
 ```
 
-In the end, the Sex variable did not impact the results nearly as much as predicted. Interestingly, with the Sex variable included, the localized model was given significantly lower weight in the ensemble (0.45 down to 0.17). This lends support to the original prediction that a localized linear model would perform well using only the numerical data. Once Sex was included, the ranger and gradient boosted models took over, which aligns with what was seen in the data exploration; both ranger and gradient boost are tree-based models that could benefit from an advantageous starting class when predicting age (i.e. infant vs adult).
+In the end, the Sex variable did not impact the results nearly as much as predicted. Interestingly, with the Sex variable included, the localized model was given significantly lower weight in the ensemble (0.41 down to 0.21). This lends support to the original prediction that a localized linear model would perform well using only the numerical data. Once Sex was included, the ranger and gradient boosted models took over, which aligns with what was seen in the data exploration; both ranger and gradient boost are tree-based models that could benefit from an advantageous starting class when predicting age (i.e. infant vs adult).
 
 A random selection of ten records from the two data sets confirmed the similar performance results.
 
