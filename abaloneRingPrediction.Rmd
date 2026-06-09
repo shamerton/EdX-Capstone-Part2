@@ -125,7 +125,7 @@ plotRatioLengthShell
 
 When scaled to log 10, we see a very clear downward slope. In other words, abalone shell dimensions grow faster than their weight when they're young, but once they mature, the weight begins to fill out (not unlike human children).
 
-Since the shape of the density plots were highly similar, additional ratios were not explored.
+Since the shape of the density plots consistently overlapped, additional ratios were not explored. Only the length to shell weight ratio was used in any models.
 
 ### Abalone Sex
 
